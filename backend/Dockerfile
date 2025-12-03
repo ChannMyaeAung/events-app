@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.22 AS builder
+FROM golang:1.24 AS builder
 WORKDIR /app/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
@@ -13,9 +13,11 @@ WORKDIR /srv
 COPY --from=builder /bin/events-api ./events-api
 COPY --from=builder /bin/migrate ./migrate
 COPY --from=builder /app/backend/docs ./docs
+COPY --from=builder /app/backend/cmd/migrate/migrations ./migrations
 ENV PORT=8080 \
-    DATABASE_PATH=/tmp/data.db \
+    DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable \
     UPLOAD_DIR=/tmp/uploads \
-    GIN_MODE=release
+    GIN_MODE=release \
+    MIGRATIONS_DIR=/srv/migrations
 EXPOSE 8080
 CMD ["./events-api"]

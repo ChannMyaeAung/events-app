@@ -81,26 +81,26 @@ func (m *UserModel) Update(ctx context.Context, id int, params UpdateUserParams)
 
 	setClauses := []string{}
 	args := make([]any, 0, 4)
+	appendClause := func(column string, value any) {
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", column, len(args)+1))
+		args = append(args, value)
+	}
 
 	if params.Name != nil {
-		setClauses = append(setClauses, "name = ?")
-		args = append(args, strings.TrimSpace(*params.Name))
+		appendClause("name", strings.TrimSpace(*params.Name))
 	}
 	if params.Email != nil {
-		setClauses = append(setClauses, "email = ?")
-		args = append(args, strings.TrimSpace(*params.Email))
+		appendClause("email", strings.TrimSpace(*params.Email))
 	}
 	if len(params.PasswordHash) > 0 {
-		setClauses = append(setClauses, "password = ?")
-		args = append(args, params.PasswordHash)
+		appendClause("password", params.PasswordHash)
 	}
 
 	if params.ProfilePicture != nil {
-		setClauses = append(setClauses, "profile_picture = ?")
 		if strings.TrimSpace(*params.ProfilePicture) == "" {
-			args = append(args, nil)
+			appendClause("profile_picture", nil)
 		} else {
-			args = append(args, strings.TrimSpace(*params.ProfilePicture))
+			appendClause("profile_picture", strings.TrimSpace(*params.ProfilePicture))
 		}
 	}
 
@@ -108,7 +108,7 @@ func (m *UserModel) Update(ctx context.Context, id int, params UpdateUserParams)
 		return m.GetUserByID(id)
 	}
 
-	query := fmt.Sprintf("UPDATE users SET %s WHERE id = ?", strings.Join(setClauses, ", "))
+	query := fmt.Sprintf("UPDATE users SET %s WHERE id = $%d", strings.Join(setClauses, ", "), len(args)+1)
 	args = append(args, id)
 	if _, err := m.DB.ExecContext(ctx, query, args...); err != nil {
 		return nil, err

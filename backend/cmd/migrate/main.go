@@ -1,15 +1,16 @@
-// CLI program that runs DB migrations (up or down) against a SQLite database using golang-migrate.
+// CLI program that runs DB migrations (up or down) against a Postgres database using golang-migrate.
 package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/sqlite"
-	"github.com/golang-migrate/migrate/v4/source/file"
-	_ "modernc.org/sqlite"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -19,45 +20,43 @@ func main() {
 
 	direction := os.Args[1]
 
-	// Open a database handle for the SQLite file in the working directory.
-    // sql.Open does not create a file automatically for all drivers; this is the
-    // standard way to obtain *sql.DB for migrate to use.
-	db, err := sql.Open("sqlite", "./data.db")
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+	}
+
+	migrationsDir := os.Getenv("MIGRATIONS_DIR")
+	if migrationsDir == "" {
+		migrationsDir = "cmd/migrate/migrations"
+	}
+
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	defer db.Close()
 
-	// Wrap the *sql.DB in the migrate sqlite3 driver instance.
-	instance, err := sqlite.WithInstance(db, &sqlite.Config{})
+	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Create a file source pointing to the migrations directory.
-    // Path is relative to the process working directory (run from repo root).
-	fSrc, err := (&file.File{}).Open("cmd/migrate/migrations")
+	sourceURL := fmt.Sprintf("file://%s", migrationsDir)
+	m, err := migrate.NewWithDatabaseInstance(sourceURL, "postgres", driver)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Create the migrate object using the file source and sqlite3 database instance.
-	m, err := migrate.NewWithInstance("file", fSrc, "sqlite", instance)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	switch direction{
+	switch direction {
 	case "up":
-		if err := m.Up(); err != nil && err != migrate.ErrNoChange{
+		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 			log.Fatal(err)
 		}
 	case "down":
-		if err := m.Down(); err != nil && err != migrate.ErrNoChange{
+		if err := m.Down(); err != nil && err != migrate.ErrNoChange {
 			log.Fatal(err)
 		}
 	default:
-		log.Fatal("Invalid migration direction. Please use 'up' or 'down'.")
+		log.Fatalf("Invalid migration direction %q. Please use 'up' or 'down'.", direction)
 	}
 }

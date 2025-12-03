@@ -3,66 +3,11 @@ package database
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
-	"fmt"
 	"time"
 )
 
 type EventModel struct {
 	DB *sql.DB
-}
-
-// NullableTime handles potentially invalid datetime strings from database
-type NullableTime struct {
-	time.Time
-	Valid bool
-}
-
-// Scan implements the Scanner interface for database/sql
-func (nt *NullableTime) Scan(value interface{}) error {
-	if value == nil {
-		nt.Valid = false
-		return nil
-	}
-
-	switch v := value.(type) {
-	case time.Time:
-		nt.Time = v
-		nt.Valid = true
-		return nil
-	case string:
-		// Try to parse various date formats
-		formats := []string{
-			time.RFC3339,           // "2006-01-02T15:04:05Z07:00"
-			"2006-01-02T15:04:05Z", // "2025-05-20T00:00:00Z"
-			"2006-01-02 15:04:05",  // "2025-01-02 15:04:05"
-			"2006-01-02",           // "2025-01-02"
-			"02-01-2006",           // "01-09-2025"
-		}
-
-		for _, format := range formats {
-			if t, err := time.Parse(format, v); err == nil {
-				nt.Time = t
-				nt.Valid = true
-				return nil
-			}
-		}
-
-		// If all parsing fails, set a default time
-		nt.Time = time.Now()
-		nt.Valid = true
-		return nil
-	}
-
-	return fmt.Errorf("cannot scan %T into NullableTime", value)
-}
-
-// Value implements the driver Valuer interface
-func (nt NullableTime) Value() (driver.Value, error) {
-	if !nt.Valid {
-		return nil, nil
-	}
-	return nt.Time, nil
 }
 
 // Event represents an event record in the database.
@@ -90,37 +35,22 @@ func (m *EventModel) GetAll() ([]*Event, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := "SELECT id, owner_id, name, description, date, location FROM events"
-
-	rows, err := m.DB.QueryContext(ctx, query)
+	rows, err := m.DB.QueryContext(ctx, "SELECT id, owner_id, name, description, date, location FROM events")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	events := []*Event{}
-
+	var events []*Event
 	for rows.Next() {
 		var event Event
-		var dateStr string
-
-		// Scan date as string first to handle invalid formats
-		if err := rows.Scan(&event.Id, &event.OwnerId, &event.Name, &event.Description, &dateStr, &event.Location); err != nil {
+		if err := rows.Scan(&event.Id, &event.OwnerId, &event.Name, &event.Description, &event.Date, &event.Location); err != nil {
 			return nil, err
 		}
-
-		// Try to parse the date string
-		parsedDate, err := parseFlexibleDate(dateStr)
-		if err != nil {
-			fmt.Printf("Warning: Invalid date format for event %d: %s\n", event.Id, dateStr)
-			continue
-		}
-
-		event.Date = parsedDate
 		events = append(events, &event)
 	}
 
-	if err = rows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -132,31 +62,18 @@ func (m *EventModel) GetAllByOwner(ownerId int) ([]*Event, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := "SELECT id, owner_id, name, description, date, location FROM events WHERE owner_id = $1"
-
-	rows, err := m.DB.QueryContext(ctx, query, ownerId)
+	rows, err := m.DB.QueryContext(ctx, "SELECT id, owner_id, name, description, date, location FROM events WHERE owner_id = $1", ownerId)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	events := []*Event{}
-
+	var events []*Event
 	for rows.Next() {
 		var event Event
-		var dateStr string
-
-		if err := rows.Scan(&event.Id, &event.OwnerId, &event.Name, &event.Description, &dateStr, &event.Location); err != nil {
+		if err := rows.Scan(&event.Id, &event.OwnerId, &event.Name, &event.Description, &event.Date, &event.Location); err != nil {
 			return nil, err
 		}
-
-		parsedDate, err := parseFlexibleDate(dateStr)
-		if err != nil {
-			fmt.Printf("Warning: Invalid date format for event %d: %s\n", event.Id, dateStr)
-			continue
-		}
-
-		event.Date = parsedDate
 		events = append(events, &event)
 	}
 
@@ -167,48 +84,19 @@ func (m *EventModel) GetAllByOwner(ownerId int) ([]*Event, error) {
 	return events, nil
 }
 
-// parseFlexibleDate tries to parse various date formats
-func parseFlexibleDate(dateStr string) (time.Time, error) {
-	formats := []string{
-		time.RFC3339,           // "2006-01-02T15:04:05Z07:00"
-		"2006-01-02T15:04:05Z", // "2025-05-20T00:00:00Z"
-		"2006-01-02 15:04:05",  // "2025-01-02 15:04:05"
-		"2006-01-02",           // "2025-01-02"
-		"02-01-2006",           // "01-09-2025"
-	}
-
-	for _, format := range formats {
-		if t, err := time.Parse(format, dateStr); err == nil {
-			return t, nil
-		}
-	}
-
-	return time.Time{}, fmt.Errorf("unable to parse date: %s", dateStr)
-}
-
 // Get retrieves a single event by its ID with better date handling
 func (m *EventModel) Get(id int) (*Event, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := "SELECT id, owner_id, name, description, date, location FROM events WHERE id = $1"
-
 	var event Event
-	var dateStr string
-
-	err := m.DB.QueryRowContext(ctx, query, id).Scan(&event.Id, &event.OwnerId, &event.Name, &event.Description, &dateStr, &event.Location)
+	err := m.DB.QueryRowContext(ctx, "SELECT id, owner_id, name, description, date, location FROM events WHERE id = $1", id).
+		Scan(&event.Id, &event.OwnerId, &event.Name, &event.Description, &event.Date, &event.Location)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
-	}
-
-	parsedDate, err := parseFlexibleDate(dateStr)
-	if err != nil {
-		event.Date = time.Now()
-	} else {
-		event.Date = parsedDate
 	}
 
 	return &event, nil

@@ -1,1 +1,1 @@
-DROP TABLE IF EXISTS attendees;
+DROP TABLE IF EXISTS attendees CASCADE;
