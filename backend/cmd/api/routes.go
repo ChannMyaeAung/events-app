@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -15,8 +17,27 @@ func (app *application) routes() http.Handler {
 
 	g.Static("/uploads", app.uploadDir) // serve uploaded avatars
 
+	allowedOrigins := []string{
+		"http://localhost:3000",
+		"http://localhost:5173",
+		"http://localhost:3001",
+		"https://events-app-omega-two.vercel.app",
+		"https://events-app-git-main-channmyaeaungs-projects.vercel.app",
+		"https://events-ldwp02dpu-channmyaeaungs-projects.vercel.app",
+	}
+
+	if envOrigins := strings.TrimSpace(os.Getenv("CORS_ORIGINS")); envOrigins != "" {
+		allowedOrigins = allowedOrigins[:0]
+		for _, origin := range strings.Split(envOrigins, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				allowedOrigins = append(allowedOrigins, origin)
+			}
+		}
+	}
+
 	g.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:5173", "http://localhost:3001", "https://events-app-omega-two.vercel.app/", "https://events-app-git-main-channmyaeaungs-projects.vercel.app/", "https://events-ldwp02dpu-channmyaeaungs-projects.vercel.app/"},
+		AllowOrigins:     allowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		AllowCredentials: true,
