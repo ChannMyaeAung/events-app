@@ -9,7 +9,7 @@ import type { NextRequest } from "next/server";
  * It handles redirects for protected routes and prevents authenticated users
  * from accessing auth pages.
  */
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const token = req.cookies.get("token")?.value;
 
   // Parse the current pathname from the request URL

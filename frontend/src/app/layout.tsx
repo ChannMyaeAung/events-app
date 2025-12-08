@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
+import StickyBannerPage from "@/components/stickybanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,7 @@ export default function RootLayout({
         >
           <AuthProvider>
             <div className="relative flex min-h-screen flex-col">
+              <StickyBannerPage />
               <Navbar />
               <div className="flex-1">
                 <main className="container mx-auto py-8 px-4">{children}</main>
