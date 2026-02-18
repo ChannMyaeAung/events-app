@@ -2,6 +2,7 @@
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
 import { LogIn, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -23,6 +24,7 @@ export function Navbar() {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const { isAuthed, isLoading, logout, user } = useAuth();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -38,8 +40,9 @@ export function Navbar() {
       "?"
     )?.toUpperCase() || "?";
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await logout();
+    router.push("/login");
   }
 
   return (
@@ -160,18 +163,11 @@ export function Navbar() {
                         </Button>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={handleLogout}
-                        >
-                          <Link
-                            href="/login"
-                            className="flex items-center gap-1"
-                          >
+                        <Button size="sm" variant="ghost" onClick={handleLogout}>
+                          <div className="flex items-center gap-1">
                             <LogOut className="mr-2 h-4 w-4 text-destructive" />
                             <span className="text-destructive">Log out</span>
-                          </Link>
+                          </div>
                         </Button>
                       </DropdownMenuItem>
                     </DropdownMenuGroup>

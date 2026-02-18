@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"rest-api-in-gin/internal/database"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -125,6 +126,13 @@ func (app *application) registerUser(c *gin.Context) {
 	}
 
 	if err := app.models.Users.Insert(&user); err != nil {
+		// Detect unique constraint / duplicate email errors and return a friendly message
+		low := strings.ToLower(err.Error())
+		if strings.Contains(low, "duplicate") || strings.Contains(low, "unique") || strings.Contains(low, "already exists") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "User with that email already exists"})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
 		return
 	}

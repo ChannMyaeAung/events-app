@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: events
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d events"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: on-failure
+    environment:
+      # Use a fallback that points the backend to the docker-compose postgres service
+      DATABASE_URL: "${DATABASE_URL:-postgres://postgres:postgres@db:5432/events?sslmode=disable}"
+      PORT: "8080"
+      MIGRATIONS_DIR: "/migrations"
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/cmd/migrate/migrations:/migrations:ro
+
+# Optional frontend dev service (commented by default)
+#  frontend:
+#    build:
+#      context: ./frontend
+#    volumes:
+#      - ./frontend:/app
+#    working_dir: /app
+#    command: pnpm dev -H 0.0.0.0
+#    ports:
+#      - "3000:3000"
+#    environment:
+#      NEXT_PUBLIC_API_URL: "http://localhost:8080"
+
+volumes:
+  db-data:

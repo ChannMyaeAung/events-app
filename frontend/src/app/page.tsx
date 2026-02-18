@@ -1,8 +1,13 @@
+"use client";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Calendar, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Home() {
+  const router = useRouter();
+  const { isAuthed } = useAuth();
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] text-center space-y-8 w-full max-w-screen-2xl">
       <div className="space-y-4 max-w-2xl">
@@ -21,11 +26,13 @@ export default function Home() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
-        <Button asChild size="lg" className="text-lg px-8">
-          <Link href="/events">
-            Browse Events
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </Link>
+        <Button
+          size="lg"
+          className="text-lg px-8"
+          onClick={() => router.push(isAuthed ? "/events" : "/login")}
+        >
+          Browse Events
+          <ArrowRight className="ml-2 h-5 w-5" />
         </Button>
 
         <Button asChild variant={"outline"} size="lg" className="text-lg px-8">

@@ -1,6 +1,7 @@
 "use client";
 import { api, getApiError } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Event } from "@/lib/types";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -29,10 +30,17 @@ export default function EventsPage() {
   const [q, setQ] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const { isAuthed } = useAuth();
+  const router = useRouter();
   const { data, error, mutate, isLoading } = useSWR<Event[]>(
     isAuthed ? `/events` : null,
     fetcher
   );
+
+  useEffect(() => {
+    if (!isLoading && !isAuthed) {
+      router.push("/login");
+    }
+  }, [isLoading, isAuthed, router]);
 
   useEffect(() => {
     if (error && isAuthed) {

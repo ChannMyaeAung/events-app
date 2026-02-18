@@ -2,9 +2,9 @@
 
 FROM golang:1.24 AS builder
 WORKDIR /app/backend
-COPY backend/go.mod backend/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
-COPY backend/ ./
+COPY . ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /bin/events-api ./cmd/api
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /bin/migrate ./cmd/migrate
 

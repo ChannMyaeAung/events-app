@@ -30,8 +30,8 @@ function LoginContent() {
       const { data } = await api.post("/auth/login", values);
       const token = (data?.token as string) || "";
 
-      // This will update the global auth state immediately
-      login(token);
+      // This will update the global auth state immediately and wait
+      await login(token);
 
       toast.success("Logged in!");
       router.push(from);

@@ -8,6 +8,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { mutate } from "swr";
 import { api } from "@/lib/api";
 import { AuthUser } from "@/lib/types";
 
@@ -71,7 +72,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     Cookies.remove("token");
     setUser(null);
     setIsAuthed(false);
+    // Clear SWR caches related to auth and events so UI reflects logged-out state
+    try {
+      mutate("/auth/me", undefined, false);
+      mutate("/events", undefined, false);
+    } catch (e) {
+      // ignore mutate errors
+    }
   }, []);
+
 
   const refreshUser = useCallback(async () => {
     try {

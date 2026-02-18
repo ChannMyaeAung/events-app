@@ -27,8 +27,8 @@ export default function RegisterPage() {
       const { data } = await api.post("/auth/register", values);
       const token = (data?.token as string) || "";
 
-      // This will update the global auth state immediately
-      login(token);
+      // This will update the global auth state immediately and wait
+      await login(token);
 
       toast.success("Account created!");
       router.push("/events");
