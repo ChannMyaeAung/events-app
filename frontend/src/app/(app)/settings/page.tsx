@@ -32,13 +32,27 @@ import {
 } from "@/components/ui/alert-dialog";
 import Image from "next/image";
 
+const DEMO_EMAILS = ["johndoe@example.com", "user@example.com"];
+
 const settingsSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters long"),
   email: z.email("Invalid email address"),
   profile_picture: z.url("Invalid URL").or(z.literal("")).optional(),
 });
 
+const changePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, "Current password is required"),
+    new_password: z.string().min(8, "Password must be at least 8 characters"),
+    confirm_password: z.string(),
+  })
+  .refine((d) => d.new_password === d.confirm_password, {
+    message: "Passwords don't match",
+    path: ["confirm_password"],
+  });
+
 type SettingsForm = z.infer<typeof settingsSchema>;
+type ChangePasswordForm = z.infer<typeof changePasswordSchema>;
 
 const SettingsPage = () => {
   const router = useRouter();
@@ -47,6 +61,26 @@ const SettingsPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const isDemoAccount = user?.email ? DEMO_EMAILS.includes(user.email) : false;
+
+  const passwordForm = useForm<ChangePasswordForm>({
+    resolver: zodResolver(changePasswordSchema),
+    defaultValues: { current_password: "", new_password: "", confirm_password: "" },
+  });
+
+  const onChangePassword = passwordForm.handleSubmit(async (values) => {
+    try {
+      await api.put("/auth/me", {
+        current_password: values.current_password,
+        password: values.new_password,
+      });
+      toast.success("Password changed successfully");
+      passwordForm.reset();
+    } catch (error) {
+      toast.error(getApiError(error));
+    }
+  });
 
   const form = useForm<SettingsForm>({
     resolver: zodResolver(settingsSchema),
@@ -248,6 +282,79 @@ const SettingsPage = () => {
               {form.formState.isSubmitting ? "Saving..." : "Save changes"}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Change password</CardTitle>
+          <CardDescription>
+            {isDemoAccount
+              ? "Demo accounts cannot change their password."
+              : "Choose a strong password with at least 8 characters."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isDemoAccount ? (
+            <p className="text-sm text-muted-foreground">
+              This is a demo account. Password changes are disabled to keep
+              credentials available for everyone.
+            </p>
+          ) : (
+            <form className="space-y-4" onSubmit={onChangePassword}>
+              <div className="space-y-2">
+                <Label htmlFor="current_password">Current password</Label>
+                <Input
+                  id="current_password"
+                  type="password"
+                  placeholder="Enter current password"
+                  {...passwordForm.register("current_password")}
+                />
+                {passwordForm.formState.errors.current_password && (
+                  <p className="text-sm text-destructive">
+                    {passwordForm.formState.errors.current_password.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new_password">New password</Label>
+                <Input
+                  id="new_password"
+                  type="password"
+                  placeholder="Enter new password"
+                  {...passwordForm.register("new_password")}
+                />
+                {passwordForm.formState.errors.new_password && (
+                  <p className="text-sm text-destructive">
+                    {passwordForm.formState.errors.new_password.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm_password">Confirm new password</Label>
+                <Input
+                  id="confirm_password"
+                  type="password"
+                  placeholder="Repeat new password"
+                  {...passwordForm.register("confirm_password")}
+                />
+                {passwordForm.formState.errors.confirm_password && (
+                  <p className="text-sm text-destructive">
+                    {passwordForm.formState.errors.confirm_password.message}
+                  </p>
+                )}
+              </div>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={passwordForm.formState.isSubmitting}
+              >
+                {passwordForm.formState.isSubmitting
+                  ? "Updating..."
+                  : "Update password"}
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
 

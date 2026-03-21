@@ -29,7 +29,7 @@ const fetcher = (url: string) => api.get(url).then((r) => r.data);
 export default function EventsPage() {
   const [q, setQ] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const { isAuthed } = useAuth();
+  const { isAuthed, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
   const { data, error, mutate, isLoading } = useSWR<Event[]>(
     isAuthed ? `/events` : null,
@@ -37,10 +37,10 @@ export default function EventsPage() {
   );
 
   useEffect(() => {
-    if (!isLoading && !isAuthed) {
+    if (!authIsLoading && !isAuthed) {
       router.push("/login");
     }
-  }, [isLoading, isAuthed, router]);
+  }, [authIsLoading, isAuthed, router]);
 
   useEffect(() => {
     if (error && isAuthed) {

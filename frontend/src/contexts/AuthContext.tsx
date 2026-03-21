@@ -29,9 +29,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchProfile = useCallback(async () => {
-    const { data } = await api.get<AuthUser>("/auth/me");
-    setUser(data);
-    setIsAuthed(true);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const { data } = await api.get<AuthUser>("/auth/me", {
+        signal: controller.signal,
+      });
+      setUser(data);
+      setIsAuthed(true);
+    } finally {
+      clearTimeout(timeout);
+    }
   }, []);
 
   useEffect(() => {

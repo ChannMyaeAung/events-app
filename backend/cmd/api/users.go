@@ -17,14 +17,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// demoEmails lists accounts that are kept intact for public demos.
+// Changes to their email or password are rejected so recruiters always
+// have working credentials.
+var demoEmails = map[string]bool{
+	"johndoe@example.com": true,
+	"user@example.com":    true,
+}
+
 // updateCurrentUserInput captures the optional fields the user can change.
 // Every field is a pointer so we can distinguish between "missing" and
 // "present but empty" which keeps PATCH semantics predictable.
+// CurrentPassword is required when Password is provided.
 type updateCurrentUserInput struct {
-	Name           *string `json:"name" binding:"omitempty,min=2,max=100"`
-	Email          *string `json:"email" binding:"omitempty,email"`
-	Password       *string `json:"password" binding:"omitempty,min=8"`
-	ProfilePicture *string `json:"profile_picture" binding:"omitempty,url"`
+	Name            *string `json:"name" binding:"omitempty,min=2,max=100"`
+	Email           *string `json:"email" binding:"omitempty,email"`
+	CurrentPassword *string `json:"current_password" binding:"omitempty"`
+	Password        *string `json:"password" binding:"omitempty,min=8"`
+	ProfilePicture  *string `json:"profile_picture" binding:"omitempty,url"`
 }
 
 // getUserByID handles GET /users/:id requests to retrieve a specific user by ID.
@@ -88,6 +98,15 @@ func (app *application) updateCurrentUser(c *gin.Context) {
 		return
 	}
 
+	// Demo accounts are read-only for email and password so that public
+	// credentials always remain valid for recruiters testing the app.
+	if demoEmails[user.Email] {
+		if input.Email != nil || input.Password != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "demo accounts cannot change email or password"})
+			return
+		}
+	}
+
 	params := database.UpdateUserParams{}
 	if input.Name != nil {
 		params.Name = input.Name
@@ -96,6 +115,16 @@ func (app *application) updateCurrentUser(c *gin.Context) {
 		params.Email = input.Email
 	}
 	if input.Password != nil {
+		// Require the current password before accepting a new one to prevent
+		// silent account takeover via a stolen or long-lived JWT.
+		if input.CurrentPassword == nil || strings.TrimSpace(*input.CurrentPassword) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is required to set a new password"})
+			return
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(*input.CurrentPassword)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
+			return
+		}
 		hashed, err := bcrypt.GenerateFromPassword([]byte(strings.TrimSpace(*input.Password)), bcrypt.DefaultCost)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
