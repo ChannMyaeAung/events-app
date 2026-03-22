@@ -137,8 +137,15 @@ const SettingsPage = () => {
     }
   }, [isAuthed, isLoading, router]);
 
-  if (!isAuthed && !isLoading) {
-    return null;
+  if (isLoading || !isAuthed) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <span>Loading…</span>
+        </div>
+      </div>
+    );
   }
 
   // handleFileChange uploads the selected file immediately so the backend can

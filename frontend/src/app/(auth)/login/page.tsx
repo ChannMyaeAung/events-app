@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { api, getApiError } from "@/lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,17 +23,21 @@ const DEMO_ACCOUNTS = [
   { label: "Demo Account 2", email: "user@example.com", password: "12345678" },
 ];
 
+// How often to ping /health while the server is cold (ms)
+const POLL_INTERVAL = 3000;
+
+type ServerStatus = "checking" | "ready" | "slow";
+
 function LoginContent() {
   const router = useRouter();
   const params = useSearchParams();
   const from = params.get("from") || "/events";
   const { login, isAuthed, isLoading: authIsLoading } = useAuth();
-  const [isSlowLoading, setIsSlowLoading] = useState(false);
 
-  // Ping the backend on mount so Render starts waking up immediately
-  useEffect(() => {
-    api.get("/health").catch(() => {});
-  }, []);
+  const [serverStatus, setServerStatus] = useState<ServerStatus>("checking");
+  // Queued demo credentials to submit once the server is ready
+  const pendingDemo = useRef<{ email: string; password: string } | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Redirect already-authenticated users away from the login page
   useEffect(() => {
@@ -47,8 +51,56 @@ function LoginContent() {
     defaultValues: { email: "", password: "" },
   });
 
+  const isSubmitting = form.formState.isSubmitting;
+
+  // Called once the server has confirmed it is awake
+  const handleServerReady = useCallback(() => {
+    setServerStatus("ready");
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    // If a demo login was waiting, fire it automatically
+    if (pendingDemo.current) {
+      const { email, password } = pendingDemo.current;
+      pendingDemo.current = null;
+      form.setValue("email", email);
+      form.setValue("password", password);
+      form.handleSubmit(onSubmit)();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form]);
+
+  // Poll /health in the background; mark ready as soon as it responds
+  useEffect(() => {
+    let slowTimer: ReturnType<typeof setTimeout>;
+
+    const check = async () => {
+      try {
+        await api.get("/health");
+        handleServerReady();
+      } catch {
+        // still cold — keep polling
+      }
+    };
+
+    // First ping immediately
+    check();
+
+    // After 5 s without a response, surface the "slow" warning
+    slowTimer = setTimeout(() => {
+      setServerStatus((prev) => (prev === "checking" ? "slow" : prev));
+    }, 5000);
+
+    pollRef.current = setInterval(check, POLL_INTERVAL);
+
+    return () => {
+      clearTimeout(slowTimer);
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [handleServerReady]);
+
   async function onSubmit(values: z.infer<typeof loginSchema>) {
-    const slowTimer = setTimeout(() => setIsSlowLoading(true), 3000);
     try {
       const { data } = await api.post("/auth/login", values);
       const token = (data?.token as string) || "";
@@ -57,24 +109,47 @@ function LoginContent() {
       router.push(from);
     } catch (e) {
       toast.error(getApiError(e));
-    } finally {
-      clearTimeout(slowTimer);
-      setIsSlowLoading(false);
     }
   }
 
   function loginAsDemo(email: string, password: string) {
+    if (serverStatus !== "ready") {
+      // Queue the login — handleServerReady will fire it automatically
+      pendingDemo.current = { email, password };
+      // Show the user that we are waiting
+      toast.info("Waiting for server to wake up, you'll be signed in automatically…");
+      return;
+    }
     form.setValue("email", email);
     form.setValue("password", password);
     form.handleSubmit(onSubmit)();
   }
 
-  const isSubmitting = form.formState.isSubmitting;
-  const submitLabel = isSlowLoading
-    ? "Server waking up (~50s)..."
-    : isSubmitting
-      ? "Signing in..."
-      : "Sign in";
+  const serverBadge = () => {
+    if (serverStatus === "ready") {
+      return (
+        <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+          <span className="h-2 w-2 rounded-full bg-green-500" />
+          Server ready
+        </span>
+      );
+    }
+    if (serverStatus === "slow") {
+      return (
+        <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+          Server waking up — demo will sign in automatically (~30–50 s)
+        </span>
+      );
+    }
+    // "checking"
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-muted-foreground" />
+        Checking server…
+      </span>
+    );
+  };
 
   return (
     <div className="mx-auto max-w-sm">
@@ -85,9 +160,12 @@ function LoginContent() {
         <CardContent className="space-y-4">
           {/* Demo account buttons */}
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground text-center py-1">
-              Try a demo account, no sign up needed
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                Try a demo account — no sign up needed
+              </p>
+              {serverBadge()}
+            </div>
             <div className="grid grid-cols-2 gap-2">
               {DEMO_ACCOUNTS.map((account) => (
                 <Button
@@ -144,7 +222,7 @@ function LoginContent() {
               )}
             </div>
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {submitLabel}
+              {isSubmitting ? "Signing in…" : "Sign in"}
             </Button>
             <p className="text-sm text-muted-foreground text-center">
               No account?{" "}

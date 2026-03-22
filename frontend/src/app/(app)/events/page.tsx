@@ -42,6 +42,19 @@ export default function EventsPage() {
     }
   }, [authIsLoading, isAuthed, router]);
 
+  // Don't render anything until we know auth state — prevents the unauthenticated
+  // flash where the events page is visible with a "Login" button in the navbar.
+  if (authIsLoading || !isAuthed) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <span>Loading…</span>
+        </div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     if (error && isAuthed) {
       toast.error(getApiError(error));
